@@ -3,22 +3,32 @@ pipeline {
 
     environment {
         AWS_REGION = "us-east-2"
-        ECR_REPO = "619955205025.dkr.ecr.us-east-2.amazonaws.com/flask-app"
+        ECR_REPO = "project1"
+        ACCOUNT_ID = "619955205025"
+        IMAGE_TAG = "latest"
     }
 
     stages {
 
         stage('Checkout Code') {
             steps {
-                git 'https://github.com/praneeth2216/projects.git'
+                git branch: 'main',
+                url: 'https://github.com/your-repo/project.git'
             }
         }
 
         stage('Build Docker Image') {
             steps {
+                sh 'docker build -t $ECR_REPO:$IMAGE_TAG .'
+            }
+        }
+
+        stage('Login to ECR') {
+            steps {
                 sh '''
-                cd app
-                docker build -t flask-app .
+                aws ecr get-login-password --region $AWS_REGION |
+                docker login --username AWS --password-stdin \
+                $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
                 '''
             }
         }
@@ -26,19 +36,20 @@ pipeline {
         stage('Push Image to ECR') {
             steps {
                 sh '''
-                aws ecr get-login-password --region $AWS_REGION \
-                | docker login --username AWS --password-stdin $ECR_REPO
+                docker tag $ECR_REPO:$IMAGE_TAG \
+                $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
 
-                docker tag flask-app:latest $ECR_REPO:latest
-                docker push $ECR_REPO:latest
+                docker push \
+                $ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
                 '''
             }
         }
 
-        stage('Deploy to Kubernetes') {
+        stage('Deploy to EKS') {
             steps {
                 sh '''
-                kubectl apply -f k8s/
+                kubectl apply -f deployment.yaml
+                kubectl apply -f service.yaml
                 '''
             }
         }
